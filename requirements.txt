@@ -1,5 +1,5 @@
-python-telegram-bot[job-queue]"
-vk-api==11.9.9
+vk_api
+python-telegram-bot[job-queue]
 requests==2.31.0
 python-dotenv==1.0.0
 aiohttp==3.8.5
