@@ -1,0 +1,5 @@
+python-telegram-bot==20.3
+vk-api==11.9.9
+requests==2.31.0
+python-dotenv==1.0.0
+aiohttp==3.8.5
