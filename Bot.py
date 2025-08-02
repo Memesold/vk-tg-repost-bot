@@ -17,6 +17,9 @@ import requests
 import sqlite3
 import asyncio
 
+# Укажите токен вашего бота-посредника
+BOT_TOKEN = 'YOUR_BOT_TOKEN'  # Замените на ваш токен
+
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -1003,8 +1006,5 @@ class TelegramBot:
         application.run_polling()
 
 if __name__ == '__main__':
-    # Укажите токен вашего бота-посредника
-    BOT_TOKEN = 'YOUR_BOT_TOKEN'  # Замените на ваш токен
-    
     bot = TelegramBot(BOT_TOKEN)
     bot.run()
