@@ -123,6 +123,7 @@ sudo apt install python3-pip -y
 git clone https://github.com/PIOSzzz/vk-tg-repost-bot.git
 cd vk-tg-repost-bot
 ```
+Тут бывает баг и "cd vk-tg-repost-bo"t не срабатывает, дополнительно выполняем команду cd vk-tg-repost-bot
 
 ---
 
