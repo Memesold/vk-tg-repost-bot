@@ -14,12 +14,22 @@
 
 ## 🔧 Установка
 
-```bash
-git clone https://github.com/PIOSzzz/vk-tg-repost-bot.git
-cd vk-tg-repost-bot
-python -m venv venv
-source venv/bin/activate   # или venv\Scripts\activate для Windows
-pip install -r requirements.txt
+```Открыть bot.py в текстовом редакторе
+
+Найти строку с токеном
+
+Заменить на свой токен:
+
+python
+BOT_TOKEN = 'YOUR_BOT_TOKEN'  # Замените этот токен
+Как получить токен бота Telegram
+Найти в Telegram @BotFather
+
+Отправить команду /newbot
+
+Следовать инструкциям (придумать имя бота и username)
+
+Получить токен вида 123456789:AAFm2f5sdf...t
 ```
 
 ## 📦 Зависимости
@@ -27,8 +37,10 @@ pip install -r requirements.txt
 Файл `requirements.txt` должен включать:
 ```
 python-telegram-bot==20.3
-vk-api
-requests
+vk-api==11.9.9
+requests==2.31.0
+python-dotenv==1.0.0
+aiohttp==3.8.5
 ```
 
 ## ⚙️ Настройка
