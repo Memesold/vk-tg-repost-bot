@@ -37,11 +37,11 @@ BOT_TOKEN = 'YOUR_BOT_TOKEN'  # Замените этот токен
 
 Файл `requirements.txt` должен включать:
 ```
-pip install python-telegram-bot==20.3
-pip install vk-api==11.9.9
-pip install requests==2.31.0
-pip install python-dotenv==1.0.0
-pip install aiohttp==3.8.5
+vk_api
+python-telegram-bot[job-queue]
+requests==2.31.0
+python-dotenv==1.0.0
+aiohttp==3.8.5
 ```
 
 ## ⚙️ Настройка
