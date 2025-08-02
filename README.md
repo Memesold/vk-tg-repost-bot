@@ -81,7 +81,7 @@ aiohttp==3.8.5
 ├── requirements.txt     # Зависимости
 └── README.md            # Этот файл
 ```
-5. Ошибки при установке
+6. **шибки при установке**
 Если возникает ошибка, попробуйте:
 
 Обновить pip:
@@ -93,7 +93,7 @@ pip install --upgrade pip
 bash
 pip install python-telegram-bot==20.3
 pip install vk-api==11.9.9
-# и т.д.
+ и т.д.
 Проверить версию Python (должна быть 3.8+):
 ```
 bash
