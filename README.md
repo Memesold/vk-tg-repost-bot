@@ -80,54 +80,100 @@ pip install aiohttp==3.8.5
 - Все конфиги хранятся в `user_data.db`
 - Лимит Telegram на медиагруппу — 10 фото
 
-Установка на ubuntu server 
+# Установка бота vk-tg-repost-bot на Ubuntu Server
 
-2. Проверка текущей версии Python:
-bash
-Копировать
-Редактировать
-python3 --version
-Если версия ниже 3.9 — обновляем.
+## Шаг 1. Обновляем пакеты и устанавливаем git и Python 3.9 с нужными модулями:
 
-3. Обновление Python до 3.9+ на Ubuntu
-Для Ubuntu 20.04 и новее:
-
-bash
-Копировать
-Редактировать
+```bash
 sudo apt update
-sudo apt install software-properties-common -y
+sudo apt install git python3.9 python3.9-venv python3.9-dev software-properties-common -y
+```
+
+---
+
+## Шаг 2. Если Python 3.9 не установлен, добавляем репозиторий и ставим его:
+
+```bash
 sudo add-apt-repository ppa:deadsnakes/ppa -y
 sudo apt update
 sudo apt install python3.9 python3.9-venv python3.9-dev -y
+```
 
-1. Устанавливаем git и обновляем пакеты:
-bash
-Копировать
-Редактировать
-apt update
-apt install git python3.9 python3.9-venv python3.9-dev -y
+---
 
-Установка pip для Python 3:
-bash
-Копировать
-Редактировать
-apt update
-apt install python3-pip -y
+## Шаг 3. Проверяем версию Python:
 
-После установки pip, чтобы использовать именно для python3.9, лучше так:
-bash
-Копировать
-Редактировать
-python3.9 -m pip install --upgrade pip
-python3.9 -m pip install -r requirements.txt
+```bash
+python3.9 --version
+```
 
-И запускать тоже через python3.9:
+---
 
-bash
-Копировать
-Редактировать
+## Шаг 4. Устанавливаем pip для Python 3:
+
+```bash
+sudo apt install python3-pip -y
+```
+
+---
+
+## Шаг 5. Клонируем репозиторий с ботом:
+
+```bash
+git clone https://github.com/PIOSzzz/vk-tg-repost-bot.git
+cd vk-tg-repost-bot
+```
+
+---
+
+## Шаг 6. Создаем виртуальное окружение и активируем его:
+
+```bash
+python3.9 -m venv venv
+source venv/bin/activate
+```
+
+---
+
+## Шаг 7. Обновляем pip внутри виртуального окружения и ставим зависимости:
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Если в процессе появится ошибка с `JobQueue`, установи дополнительно:
+
+```bash
+pip install "python-telegram-bot[job-queue]"
+```
+
+---
+
+## Шаг 8. Редактируем токен бота:
+
+```bash
+nano Bot.py
+```
+
+- Найди строку с токеном:  
+  `TOKEN = "YOU_BOT_TOKEN"` (примерно)  
+- Замени на свой токен.  
+- Сохрани: `Ctrl+O` → `Enter` → `Ctrl+X`
+
+---
+
+## Шаг 9. Запускаем бота:
+
+```bash
 python3.9 Bot.py
+```
+
+---
+
+Если будут вопросы — пиши, разберёмся!  
+Бля братан, так всё четко и понятно.
+
 
 
 
