@@ -80,5 +80,55 @@ pip install aiohttp==3.8.5
 - Все конфиги хранятся в `user_data.db`
 - Лимит Telegram на медиагруппу — 10 фото
 
+Установка на ubuntu server 
+
+2. Проверка текущей версии Python:
+bash
+Копировать
+Редактировать
+python3 --version
+Если версия ниже 3.9 — обновляем.
+
+3. Обновление Python до 3.9+ на Ubuntu
+Для Ubuntu 20.04 и новее:
+
+bash
+Копировать
+Редактировать
+sudo apt update
+sudo apt install software-properties-common -y
+sudo add-apt-repository ppa:deadsnakes/ppa -y
+sudo apt update
+sudo apt install python3.9 python3.9-venv python3.9-dev -y
+
+1. Устанавливаем git и обновляем пакеты:
+bash
+Копировать
+Редактировать
+apt update
+apt install git python3.9 python3.9-venv python3.9-dev -y
+
+Установка pip для Python 3:
+bash
+Копировать
+Редактировать
+apt update
+apt install python3-pip -y
+
+После установки pip, чтобы использовать именно для python3.9, лучше так:
+bash
+Копировать
+Редактировать
+python3.9 -m pip install --upgrade pip
+python3.9 -m pip install -r requirements.txt
+
+И запускать тоже через python3.9:
+
+bash
+Копировать
+Редактировать
+python3.9 Bot.py
+
+
 
 
