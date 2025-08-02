@@ -14,6 +14,8 @@ import time
 import json
 import os
 import requests
+import sqlite3
+import asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -23,30 +25,59 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 USER_DATA_FILE = 'user_data.json'
+DB_FILE = 'user_data.db'
 
 class UserConfig:
     def __init__(self):
-        self.data = self._load_data()
+        self.init_db()
 
-    def _load_data(self):
-        if os.path.exists(USER_DATA_FILE):
-            with open(USER_DATA_FILE, 'r') as f:
-                return json.load(f)
-        return {}
-
-    def save(self):
-        with open(USER_DATA_FILE, 'w') as f:
-            json.dump(self.data, f, indent=2)
+    def init_db(self):
+        """Initialize the database and create tables if they don't exist"""
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Create users table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                data TEXT
+            )
+        ''')
+        
+        conn.commit()
+        conn.close()
 
     def get_user_data(self, user_id: int) -> dict:
-        return self.data.get(str(user_id), {})
+        """Get user data from database"""
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT data FROM users WHERE user_id = ?', (user_id,))
+        result = cursor.fetchone()
+        
+        conn.close()
+        
+        if result:
+            return json.loads(result[0])
+        return {}
 
     def update_user_data(self, user_id: int, key: str, value):
-        user_id = str(user_id)
-        if user_id not in self.data:
-            self.data[user_id] = {}
-        self.data[user_id][key] = value
-        self.save()
+        """Update user data in database"""
+        # Get current user data
+        user_data = self.get_user_data(user_id)
+        user_data[key] = value
+        
+        # Save updated data
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO users (user_id, data) 
+            VALUES (?, ?)
+        ''', (user_id, json.dumps(user_data)))
+        
+        conn.commit()
+        conn.close()
 
     def get_bots(self, user_id: int) -> list:
         """Get all bot configurations for a user"""
@@ -62,27 +93,52 @@ class UserConfig:
 
     def update_bot(self, user_id: int, bot_index: int, bot_data: dict):
         """Update specific bot configuration"""
-        user_id = str(user_id)
-        if user_id not in self.data:
-            self.data[user_id] = {}
+        # Get current user data
+        user_data = self.get_user_data(user_id)
         
-        if 'bots' not in self.data[user_id]:
-            self.data[user_id]['bots'] = [{}, {}, {}]  # Initialize with 3 empty slots
+        # Initialize bots list if it doesn't exist
+        if 'bots' not in user_data:
+            user_data['bots'] = [{}, {}, {}]  # Initialize with 3 empty slots
         
-        # Ensure we have 3 slots
-        while len(self.data[user_id]['bots']) < 3:
-            self.data[user_id]['bots'].append({})
+        # Ensure we have enough slots
+        while len(user_data['bots']) <= bot_index:
+            user_data['bots'].append({})
             
-        self.data[user_id]['bots'][bot_index] = bot_data
-        self.save()
+        user_data['bots'][bot_index] = bot_data
+        
+        # Save updated data
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO users (user_id, data) 
+            VALUES (?, ?)
+        ''', (user_id, json.dumps(user_data)))
+        
+        conn.commit()
+        conn.close()
 
     def delete_bot(self, user_id: int, bot_index: int):
         """Delete specific bot configuration"""
-        user_id = str(user_id)
-        if user_id in self.data and 'bots' in self.data[user_id]:
-            if 0 <= bot_index < len(self.data[user_id]['bots']):
-                self.data[user_id]['bots'][bot_index] = {}
-                self.save()
+        # Get current user data
+        user_data = self.get_user_data(user_id)
+        
+        # Check if user has bots data
+        if 'bots' in user_data:
+            if 0 <= bot_index < len(user_data['bots']):
+                user_data['bots'][bot_index] = {}
+                
+                # Save updated data
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT OR REPLACE INTO users (user_id, data) 
+                    VALUES (?, ?)
+                ''', (user_id, json.dumps(user_data)))
+                
+                conn.commit()
+                conn.close()
 
     def get_last_post_id(self, user_id: int, bot_index: int = 0) -> int:
         """Get last post ID for specific bot"""
@@ -94,14 +150,21 @@ class UserConfig:
 
     def set_last_post_id(self, user_id: int, bot_index: int, post_id: int):
         """Set last post ID for specific bot"""
+        # Get current bots data
         bots = self.get_bots(user_id)
+        
         # Ensure we have enough slots
         while len(bots) <= bot_index:
             bots.append({})
         
+        # Initialize bot data if empty
         if not bots[bot_index]:
             bots[bot_index] = {}
+            
+        # Set the last post ID
         bots[bot_index]['last_post_id'] = post_id
+        
+        # Update the bot data in database
         self.update_bot(user_id, bot_index, bots[bot_index])
 
 class VKParser:
@@ -113,10 +176,10 @@ class VKParser:
 
     def get_new_posts(self, last_checked_id: int) -> tuple[list, int]:
         try:
-            # Получаем 5 последних постов
+            # Получаем 10 последних постов для лучшего обнаружения
             response = self.vk.wall.get(
                 owner_id=self.group_id,
-                count=5,
+                count=10,
                 filter='owner',
                 v=self.api_version
             )
@@ -124,18 +187,27 @@ class VKParser:
             new_posts = []
             current_max_id = last_checked_id
             
-            for post in response['items']:
+            # Сортируем посты по ID (от старых к новым)
+            sorted_posts = sorted(response['items'], key=lambda x: x['id'])
+            
+            for post in sorted_posts:
                 # Пропускаем закрепленный пост и рекламу
                 if post.get('is_pinned') or post.get('marked_as_ads'):
                     continue
                     
+                # Проверяем, является ли пост новым
                 if post['id'] > last_checked_id:
                     new_posts.append(post)
                     if post['id'] > current_max_id:
                         current_max_id = post['id']
             
+            # Сортируем новые посты по ID (от старых к новым) для правильного порядка публикации
+            new_posts.sort(key=lambda x: x['id'])
+            
             if new_posts:
-                logger.info(f"Найдены новые посты. Максимальный ID: {current_max_id}")
+                logger.info(f"Найдены новые посты: {len(new_posts)}. Максимальный ID: {current_max_id}")
+            else:
+                logger.info(f"Новых постов не найдено. Последний ID: {last_checked_id}")
             
             return new_posts, current_max_id
             
@@ -603,19 +675,30 @@ class TelegramBot:
             if bot and all(k in bot for k in ['vk_token', 'vk_group_id', 'tg_bot_token', 'tg_channel']):
                 try:
                     last_post_id = self.user_config.get_last_post_id(user_id, i)
+                    logger.info(f"Проверка постов для бота #{i+1}, последний ID: {last_post_id}")
                     vk_parser = VKParser(bot['vk_token'], bot['vk_group_id'])
                     posts, new_last_post_id = vk_parser.get_new_posts(last_post_id)
                     
                     if posts:
                         # Сохраняем новый last_post_id перед отправкой
                         self.user_config.set_last_post_id(user_id, i, new_last_post_id)
+                        logger.info(f"Найдено {len(posts)} новых постов для бота #{i+1}, новый последний ID: {new_last_post_id}")
                         
                         # Отправляем посты
+                        sent_posts = 0
+                        failed_posts = 0
                         for post in posts:
-                            await self._forward_post(post, bot['tg_bot_token'], bot['tg_channel'], context)
-                            time.sleep(1)  # Задержка между постами
+                            try:
+                                await self._forward_post(post, bot['tg_bot_token'], bot['tg_channel'], context)
+                                sent_posts += 1
+                                logger.info(f"Пост #{post['id']} успешно отправлен для бота #{i+1}")
+                            except Exception as e:
+                                failed_posts += 1
+                                logger.error(f"Ошибка отправки поста #{post['id']} для бота #{i+1}: {e}")
+                            
+                            await asyncio.sleep(1)  # Задержка между постами
                         
-                        results.append(f"✅ Бот #{i+1}: Опубликовано {len(posts)} постов")
+                        results.append(f"✅ Бот #{i+1}: Опубликовано {sent_posts} постов, ошибок: {failed_posts}")
                     else:
                         results.append(f"🟢 Бот #{i+1}: Новых постов нет")
                 except VkApiError as e:
@@ -679,6 +762,7 @@ class TelegramBot:
         
         try:
             last_post_id = self.user_config.get_last_post_id(user_id, bot_index)
+            logger.info(f"Проверка постов для бота #{bot_index+1}, последний ID: {last_post_id}")
             vk_parser = VKParser(bot['vk_token'], bot['vk_group_id'])
             posts, new_last_post_id = vk_parser.get_new_posts(last_post_id)
             
@@ -689,25 +773,38 @@ class TelegramBot:
                 ]
                 await message.edit_text(
                     f"🟢 <b>Новых постов не найдено для Бота #{bot_index+1}</b>\n\n"
-                    "Все актуальные посты уже опубликованы в вашем канале.",
+                    "Все актуальные посты уже опубликованы в вашем канале.\n\n"
+                    f"Последний проверенный ID: <code>{last_post_id}</code>",
                     reply_markup=InlineKeyboardMarkup(keyboard),
                     parse_mode='HTML'
                 )
             else:
                 # Сохраняем новый last_post_id перед отправкой
                 self.user_config.set_last_post_id(user_id, bot_index, new_last_post_id)
+                logger.info(f"Найдено {len(posts)} новых постов для бота #{bot_index+1}, новый последний ID: {new_last_post_id}")
                 
                 # Прогресс-бар отправки
                 total_posts = len(posts)
+                sent_posts = 0
+                failed_posts = 0
+                
                 for i, post in enumerate(posts, 1):
                     await message.edit_text(
                         f"📤 <b>Публикация постов для Бота #{bot_index+1}...</b>\n\n"
-                        f"⏳ Отправлено: <b>{i-1}/{total_posts}</b>\n"
+                        f"⏳ Отправлено: <b>{sent_posts}/{total_posts}</b>\n"
+                        f"❌ Ошибок: <b>{failed_posts}</b>\n"
                         f"🔄 Обрабатываю пост #{post['id']}",
                         parse_mode='HTML'
                     )
-                    await self._forward_post(post, bot['tg_bot_token'], bot['tg_channel'], context)
-                    time.sleep(1)  # Задержка между постами
+                    try:
+                        await self._forward_post(post, bot['tg_bot_token'], bot['tg_channel'], context)
+                        sent_posts += 1
+                        logger.info(f"Пост #{post['id']} успешно отправлен для бота #{bot_index+1}")
+                    except Exception as e:
+                        failed_posts += 1
+                        logger.error(f"Ошибка отправки поста #{post['id']} для бота #{bot_index+1}: {e}")
+                    
+                    await asyncio.sleep(1)  # Задержка между постами
                 
                 keyboard = [
                     [InlineKeyboardButton("🔄 Проверить снова", callback_data=f'check_now_{bot_index}')],
@@ -715,8 +812,9 @@ class TelegramBot:
                 ]
                 await message.edit_text(
                     f"✅ <b>Готово для Бота #{bot_index+1}!</b>\n\n"
-                    f"Успешно опубликовано <b>{total_posts}</b> новых постов в канал "
-                    f"<b>{bot['tg_channel']}</b>.\n\n"
+                    f"Успешно опубликовано: <b>{sent_posts}</b> постов\n"
+                    f"Ошибок: <b>{failed_posts}</b>\n\n"
+                    f"Канал: <b>{bot['tg_channel']}</b>\n"
                     f"Последний обработанный ID: <code>{new_last_post_id}</code>",
                     reply_markup=InlineKeyboardMarkup(keyboard),
                     parse_mode='HTML'
@@ -760,6 +858,10 @@ class TelegramBot:
         try:
             text = post.get('text', 'Новый пост')
             
+            # Ограничиваем длину текста до 4096 символов (лимит Telegram)
+            if len(text) > 4096:
+                text = text[:4093] + "..."
+            
             if post.get('attachments'):
                 media = []
                 for attach in post['attachments']:
@@ -791,10 +893,17 @@ class TelegramBot:
             'text': text,
             'parse_mode': 'HTML'
         }
-        requests.post(url, json=payload)
+        response = requests.post(url, json=payload)
+        if response.status_code != 200:
+            logger.error(f"Ошибка отправки сообщения: {response.text}")
+        return response
 
     async def _send_photo(self, text: str, photo_url: str, bot_token: str, channel: str):
         """Отправка фото"""
+        # Ограничиваем длину текста для подписи (лимит 1024 символа)
+        if len(text) > 1024:
+            text = text[:1021] + "..."
+            
         url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
         payload = {
             'chat_id': channel,
@@ -802,11 +911,21 @@ class TelegramBot:
             'caption': text,
             'parse_mode': 'HTML'
         }
-        requests.post(url, json=payload)
+        response = requests.post(url, json=payload)
+        if response.status_code != 200:
+            logger.error(f"Ошибка отправки фото: {response.text}")
+        return response
 
     async def _send_media_group(self, text: str, media_urls: list, bot_token: str, channel: str):
         """Отправка медиагруппы"""
         url = f"https://api.telegram.org/bot{bot_token}/sendMediaGroup"
+        
+        # Ограничиваем длину текста для подписи (лимит 1024 символа)
+        if len(text) > 1024:
+            text = text[:1021] + "..."
+        
+        # Ограничиваем количество медиа в группе до 10 (лимит Telegram)
+        media_urls = media_urls[:10]
         
         media = [{
             'type': 'photo',
@@ -817,13 +936,27 @@ class TelegramBot:
         
         payload = {
             'chat_id': channel,
-            'media': json.dumps(media)
+            'media': media  # Передаем список напрямую, а не как JSON строку
         }
-        requests.post(url, json=payload)
+        response = requests.post(url, json=payload)
+        if response.status_code != 200:
+            logger.error(f"Ошибка отправки медиагруппы: {response.text}")
+        return response
 
     async def _auto_check_posts(self, context: ContextTypes.DEFAULT_TYPE):
         """Автоматическая проверка постов для всех ботов"""
-        for user_id, user_data in self.user_config.data.items():
+        # Получаем всех пользователей из базы данных
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('SELECT user_id, data FROM users')
+        users = cursor.fetchall()
+        conn.close()
+        
+        # Проверяем каждого пользователя
+        for user_row in users:
+            user_id = user_row[0]
+            user_data = json.loads(user_row[1]) if user_row[1] else {}
+            
             # Получаем все боты пользователя
             bots = user_data.get('bots', [])
             
@@ -832,23 +965,23 @@ class TelegramBot:
                 if bot and all(k in bot for k in ['vk_token', 'vk_group_id', 'tg_bot_token', 'tg_channel']):
                     try:
                         logger.info(f"Проверяем посты для пользователя {user_id}, бот #{bot_index+1}")
-                        last_post_id = self.user_config.get_last_post_id(int(user_id), bot_index)
+                        last_post_id = self.user_config.get_last_post_id(user_id, bot_index)
                         vk_parser = VKParser(bot['vk_token'], bot['vk_group_id'])
                         posts, new_last_post_id = vk_parser.get_new_posts(last_post_id)
                         
                         if posts:
                             logger.info(f"Найдено {len(posts)} новых постов для пользователя {user_id}, бот #{bot_index+1}")
                             # Сохраняем новый last_post_id перед отправкой
-                            self.user_config.set_last_post_id(int(user_id), bot_index, new_last_post_id)
+                            self.user_config.set_last_post_id(user_id, bot_index, new_last_post_id)
                             
                             for post in posts:
                                 await self._forward_post(post, bot['tg_bot_token'], bot['tg_channel'], context)
-                                time.sleep(1)  # Задержка между постами
+                                await asyncio.sleep(1)  # Задержка между постами
                             
                     except VkApiError as e:
                         logger.error(f"Ошибка VK API для пользователя {user_id}, бот #{bot_index+1}: {e}")
                     except Exception as e:
-                        logger.error(f"Неизвестная ошибка для пользователя {user_id}, бот #{bot_index+1}: {e}")
+                        logger.error(f"Неизвестная ошибка для пользователя {user_id}, бот #{bot_index+1}: {e}", exc_info=True)
 
     def run(self):
         """Запуск бота"""
@@ -871,7 +1004,7 @@ class TelegramBot:
 
 if __name__ == '__main__':
     # Укажите токен вашего бота-посредника
-    BOT_TOKEN = 'YOUR_BOT_TG_TOKEN'  # Замените на ваш токен
+    BOT_TOKEN = 'YOUR_BOT_TOKEN'  # Замените на ваш токен
     
     bot = TelegramBot(BOT_TOKEN)
     bot.run()
