@@ -15,8 +15,8 @@
 ## 🔧 Установка
 
 ```bash
-git clone https://github.com/yourusername/vk-to-telegram-multibot.git
-cd vk-to-telegram-multibot
+git clone https://github.com/PIOSzzz/vk-tg-repost-bot.git
+cd vk-tg-repost-bot
 python -m venv venv
 source venv/bin/activate   # или venv\Scripts\activate для Windows
 pip install -r requirements.txt
